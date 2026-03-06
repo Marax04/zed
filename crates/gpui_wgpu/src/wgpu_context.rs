@@ -150,6 +150,11 @@ impl WgpuContext {
     #[cfg(not(target_family = "wasm"))]
     pub fn instance() -> wgpu::Instance {
         wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            // Include Dx12 on Windows so the WARP software adapter is available
+            // as a fallback when no usable hardware GPU is found.
+            #[cfg(target_os = "windows")]
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::GL,
+            #[cfg(not(target_os = "windows"))]
             backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
             flags: wgpu::InstanceFlags::default(),
             backend_options: wgpu::BackendOptions::default(),
@@ -262,6 +267,19 @@ impl WgpuContext {
             );
         }
 
+        // Check if the user explicitly requested the WARP software renderer.
+        let force_warp = std::env::var("ZED_WARP_FALLBACK")
+            .map(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false);
+
+        if force_warp {
+            log::warn!(
+                "ZED_WARP_FALLBACK is set — skipping hardware adapters and using \
+                 the WARP software renderer. Performance will be degraded."
+            );
+            return Self::try_warp_fallback(instance, surface).await;
+        }
+
         // Test each adapter by creating a device and configuring the surface
         for adapter in adapters {
             let info = adapter.get_info();
@@ -287,7 +305,64 @@ impl WgpuContext {
             }
         }
 
+        // No hardware adapter worked. On Windows, attempt to fall back to the
+        // WARP software renderer so Zed can still run in VMs, CI environments,
+        // and machines with broken or missing GPU drivers.
+        #[cfg(target_os = "windows")]
+        {
+            log::warn!(
+                "No hardware GPU adapter could configure the display surface. \
+                 Falling back to the WARP software renderer. \
+                 Rendering will be slower than usual. \
+                 Set ZED_WARP_FALLBACK=1 to always use this path."
+            );
+            return Self::try_warp_fallback(instance, surface).await;
+        }
+
+        #[cfg(not(target_os = "windows"))]
         anyhow::bail!("No GPU adapter found that can configure the display surface")
+    }
+
+    /// Attempt to create a wgpu context using the WARP software adapter on Windows.
+    ///
+    /// WARP (Windows Advanced Rasterization Platform) is a high-quality Microsoft
+    /// software renderer that ships with every modern Windows installation. It is
+    /// slower than real GPU hardware, but allows Zed to run in environments where
+    /// no usable GPU is present — such as CI machines, virtual machines, or systems
+    /// with broken display drivers.
+    ///
+    /// This function is only compiled on Windows targets.
+    #[cfg(target_os = "windows")]
+    async fn try_warp_fallback(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'_>,
+    ) -> anyhow::Result<(wgpu::Adapter, wgpu::Device, wgpu::Queue, bool)> {
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::None,
+                compatible_surface: Some(surface),
+                force_fallback_adapter: true,
+            })
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "No GPU adapter found and the WARP software renderer is not available. \
+                     Please install or update your GPU drivers."
+                )
+            })?;
+
+        let info = adapter.get_info();
+        log::warn!(
+            "Using WARP software adapter: {} ({:?}). \
+             This is a CPU-based renderer — expect lower performance.",
+            info.name,
+            info.backend,
+        );
+
+        let (device, queue, dual_source_blending) =
+            Self::try_adapter_with_surface(&adapter, surface).await?;
+
+        Ok((adapter, device, queue, dual_source_blending))
     }
 
     /// Try to use an adapter with a surface by creating a device and testing configuration.
