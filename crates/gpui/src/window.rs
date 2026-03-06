@@ -359,7 +359,7 @@ impl FocusId {
 ///
 /// Elements in GPUI use focus handles to participate in the application's focus tree,
 /// allowing them to receive keyboard events and participate in tab navigation. Focus
-/// handles are usually created via [`AppContext::focus_handle`] when building UI elements.
+/// handles are usually created via [`crate::App::focus_handle`] when building UI elements.
 /// Only one element per window can hold focus at a time.
 ///
 /// # Example
@@ -2224,7 +2224,7 @@ impl Window {
     }
 
     /// Produces a new frame and assigns it to `rendered_frame`. To actually show
-    /// the contents of the new [`Scene`], use [`Self::present`].
+    /// the contents of the new [`Scene`], use `Self::present`.
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
         // Set up the per-App arena for element allocation during this draw.
