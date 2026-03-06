@@ -470,14 +470,17 @@ impl Platform for WindowsPlatform {
 
     fn hide(&self) {}
 
-    // todo(windows)
+    // todo(windows): Implement using EnumWindows + ShowWindow to hide all top-level
+    // windows that do not belong to the current process. For now we match the
+    // Linux behavior and degrade gracefully instead of panicking.
     fn hide_other_apps(&self) {
-        unimplemented!()
+        log::info!("hide_other_apps is not yet implemented on Windows, ignoring the call")
     }
 
-    // todo(windows)
+    // todo(windows): Counterpart to hide_other_apps — restore previously hidden windows.
+    // Not yet implemented; degrades gracefully instead of panicking.
     fn unhide_other_apps(&self) {
-        unimplemented!()
+        log::info!("unhide_other_apps is not yet implemented on Windows, ignoring the call")
     }
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
