@@ -640,6 +640,32 @@ fn face_info_into_properties(
 }
 
 fn check_is_known_emoji_font(postscript_name: &str) -> bool {
-    // TODO: Include other common emoji fonts
-    postscript_name == "NotoColorEmoji"
+    // Emoji fonts from the major platforms and popular third-party sources.
+    // When the postscript name matches one of these, glyphs produced by the
+    // font are treated as emoji (coloured, not subpixel-anti-aliased, etc.).
+    //
+    // Platform coverage:
+    //   - macOS / iOS : "AppleColorEmoji"
+    //   - Windows 8.1+: "SegoeUIEmoji"              (COLR/CPAL colour font)
+    //   - Windows 11+ : "SegoeUIEmoji" / "Fluent Emoji" variants
+    //   - Android / cross-platform: "NotoColorEmoji", "NotoColorEmojiCompatible"
+    //   - Twitter / X : "Twemoji" (open-source, often self-hosted)
+    //   - JoyPixels   : "JoyPixels"
+    //   - EmojiOne    : "EmojiOneMozilla" (Firefox bundled variant)
+    //   - GNOME / FDO : "NotoEmoji" (outline-only fallback)
+    matches!(
+        postscript_name,
+        "AppleColorEmoji"
+            | "SegoeUIEmoji"
+            | "NotoColorEmoji"
+            | "NotoColorEmojiCompatible"
+            | "NotoEmoji"
+            | "Twemoji"
+            | "TwemojiMozilla"
+            | "JoyPixels"
+            | "EmojiOneMozilla"
+            | "FluentEmoji"
+            | "FluentEmojiFlat"
+            | "FluentEmojiHighContrast"
+    )
 }
